@@ -10,7 +10,6 @@ job_environments:
     APP_HOSTPATH: jctest
     CONTAINER_PREFIX: planet4-jctest
     WP_DB_NAME_PREFIX: planet4-jctest_wordpress
-    CHART_VERSION: 0.8.4-alpha
   develop_environment: &develop_environment
     APP_ENVIRONMENT: development
     APP_HOSTNAME: k8s.p4.greenpeace.org
@@ -22,7 +21,28 @@ job_environments:
     NEWRELIC_APPNAME: P4 JCTest Development
     WP_DB_NAME: planet4-jctest_wordpress_develop
     WP_STATELESS_BUCKET: planet4-jctest-stateless-develop
-
+  release_environment: &release_environment
+    APP_ENVIRONMENT: staging
+    APP_HOSTNAME: release.k8s.p4.greenpeace.org
+    CLOUDSQL_INSTANCE: planet4-prod
+    GCLOUD_CLUSTER: planet4-production
+    GOOGLE_PROJECT_ID: planet4-production
+    HELM_NAMESPACE: jctest
+    HELM_RELEASE: planet4-jctest-release
+    NEWRELIC_APPNAME: P4 JCTest Release
+    WP_DB_NAME: planet4-jctest_wordpress_release
+    WP_STATELESS_BUCKET: planet4-jctest-stateless-release
+  production_environment: &production_environment
+    APP_HOSTNAME: master.k8s.p4.greenpeace.org
+    CLOUDSQL_INSTANCE: planet4-prod
+    GCLOUD_CLUSTER: planet4-production
+    GOOGLE_PROJECT_ID: planet4-production
+    HELM_NAMESPACE: jctest
+    HELM_RELEASE: planet4-jctest-master
+    MIN_REPLICA_COUNT: 2
+    NEWRELIC_APPNAME: P4 JCTest Production
+    WP_DB_NAME: planet4-jctest_wordpress_master
+    WP_STATELESS_BUCKET: planet4-jctest-stateless
 
 job_definitions:
   build_steps: &build_steps
@@ -56,6 +76,46 @@ job_definitions:
           paths:
             - var
             - src
+  prepare_release: &prepare_release
+    working_directory: /tmp/workspace/src
+    steps:
+      - checkout
+      - run: release-prepare-nro.sh
+      - run:
+          name: Notify failure
+          when: on_fail
+          command: TYPE="Prepare" notify-job-failure.sh
+
+  notify_promote: &notify_promote
+    working_directory: ~/project
+    steps:
+      - checkout
+      - run:
+          name: notify
+          command: |
+            TYPE="@rawalker Promote release/$(increment-version.sh "$(git-current-tag.sh)")" \
+            EXTRA_TEXT="Verify: https://$APP_HOSTNAME/$APP_HOSTPATH" \
+            notify-job-hold.sh
+
+  notify_hold: &notify_hold
+    working_directory: ~/project
+    steps:
+      - checkout
+      - run:
+          name: notify
+          command: |
+            TYPE="@rawalker Hold: ${CIRCLE_TAG}" \
+            EXTRA_TEXT="Verify: https://$APP_HOSTNAME/$APP_HOSTPATH" \
+            notify-job-hold.sh
+
+  finish_release: &finish_release
+    steps:
+      - checkout
+      - run: release-finish.sh
+      - run:
+          name: Notify failure
+          when: on_fail
+          command: TYPE="Promote" notify-job-failure.sh
 
   deploy_steps: &deploy_steps
     working_directory: ~/
@@ -72,6 +132,40 @@ jobs:
       <<: *common_environment
       <<: *develop_environment
     <<: *build_steps
+  prepare-release:
+    <<: *defaults
+    <<: *prepare_release
+
+  notify-promote:
+    <<: *defaults
+    <<: *notify_promote
+    environment:
+      <<: *common_environment
+      <<: *release_environment
+
+  build-release:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *release_environment
+    <<: *build_steps
+
+  finish-release:
+    <<: *defaults
+    <<: *finish_release
+  build-tag:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *production_environment
+    <<: *build_steps
+
+  notify-hold:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *production_environment
+    <<: *notify_hold
 
   deploy-develop:
     <<: *defaults
@@ -79,6 +173,71 @@ jobs:
       <<: *common_environment
       <<: *develop_environment
     <<: *deploy_steps
+  deploy-release:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *release_environment
+    <<: *deploy_steps
+  deploy-tag:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *production_environment
+    <<: *deploy_steps
+
+  create-sync-sql:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *production_environment
+    working_directory: /tmp/workspace/src
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /tmp/workspace
+
+      - run:
+          name: Configure
+          command: |
+            ${HOME}/scripts/activate-gcloud-account.sh
+      - run: echo $SQLPROXY_KEY | base64 -d > key.json
+      - run: /home/circleci/sql_create_sync_file.sh
+
+
+  sync-sql-to-release:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *release_environment
+    working_directory: /tmp/workspace/src
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: Configure
+          command: |
+            ${HOME}/scripts/activate-gcloud-account.sh
+      - run: echo $SQLPROXY_KEY | base64 -d > key.json
+      - run: /home/circleci/sql_to_sync_site.sh release
+
+  sync-sql-to-develop:
+    <<: *defaults
+    environment:
+      <<: *common_environment
+      <<: *develop_environment
+    working_directory: /tmp/workspace/src
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: Configure
+          command: |
+            ${HOME}/scripts/activate-gcloud-account.sh
+      - run: echo $SQLPROXY_KEY | base64 -d > key.json
+      - run: /home/circleci/sql_to_sync_site.sh develop
 
 
 workflow_definitions:
@@ -87,6 +246,25 @@ workflow_definitions:
     filters:
       branches:
         only: develop
+  release_common: &release_common
+    context: org-global
+    filters:
+      branches:
+        only: /^release.*/
+  tag_common: &tag_common
+    context: org-global
+    filters:
+      branches:
+        ignore: /.*/
+      tags:
+        only: /^v\p{Digit}+\.\p{Digit}+\.\p{Digit}+.*/
+  sync_common: &sync_common
+    context: org-global
+    filters:
+      branches:
+        ignore: /.*/
+      tags:
+        only: /sync.*/
 
 workflows:
   version: 2
@@ -98,3 +276,51 @@ workflows:
           <<: *develop_common
           requires:
             - build-branch
+      - prepare-release:
+          <<: *develop_common
+          requires:
+            - deploy-develop
+
+  release:
+    jobs:
+      - build-release:
+          <<: *release_common
+      - deploy-release:
+          <<: *release_common
+          requires:
+            - build-release
+      - notify-promote:
+          <<: *release_common
+          requires:
+            - deploy-release
+      - hold-promote:
+          <<: *release_common
+          type: approval
+          requires:
+            - deploy-release
+      - finish-release:
+          <<: *release_common
+          requires:
+            - hold-promote
+            - notify-promote
+  tag:
+    jobs:
+      - build-tag:
+          <<: *tag_common
+      - deploy-tag:
+          <<: *tag_common
+          requires:
+            - build-tag
+
+  create-sync-sql:
+    jobs:
+      - create-sync-sql:
+          <<: *sync_common
+      - sync-sql-to-release:
+          <<: *sync_common
+          requires:
+            - create-sync-sql
+      - sync-sql-to-develop:
+          <<: *sync_common
+          requires:
+            - sync-sql-to-release
