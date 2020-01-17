@@ -1,4 +1,5 @@
- version: 2.1
+---
+version: 2.1
 
 parameters:
   run_release_init:
