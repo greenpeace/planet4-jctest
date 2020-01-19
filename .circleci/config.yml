@@ -77,7 +77,7 @@ job_definitions:
       - run:
           name: Notify failure
           when: on_fail
-          command: TYPE="Build" notify-job-failure.sh
+          command: TYPE="Build " notify-job-failure.sh
       - save_cache:
           key: composer-v5-{{ .Branch }}-{{ .Revision }}-{{ .BuildNum }}
           paths:
