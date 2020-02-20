@@ -55,6 +55,7 @@ job_environments:
     NEWRELIC_APPNAME: P4 JCTest Production
     WP_DB_NAME: planet4-jctest_wordpress_master
     WP_STATELESS_BUCKET: planet4-jctest-stateless
+    GEOIP2_ENABLED: false
 job_definitions:
   build_steps: &build_steps
     working_directory: ~/
