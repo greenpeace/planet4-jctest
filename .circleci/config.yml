@@ -14,7 +14,7 @@ job_environments:
     CONTAINER_PREFIX: planet4-jctest
     APP_HOSTPATH: jctest
     WP_DB_NAME_PREFIX: planet4-jctest_wordpress
-    WP_VERSION: 5.4
+    CHART_VERSION: 0.8.10-reduced
   develop_environment: &develop_environment
     APP_ENVIRONMENT: development
     APP_HOSTNAME: k8s.p4.greenpeace.org
