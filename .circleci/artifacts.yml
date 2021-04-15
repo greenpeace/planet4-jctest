@@ -33,7 +33,8 @@ job_environments:
     GOOGLE_PROJECT_ID: planet4-production
     HELM_NAMESPACE: jctest
     HELM_RELEASE: planet4-jctest-master
-    MIN_REPLICA_COUNT: 2
+    MAX_REPLICA_COUNT: 1
+    MIN_REPLICA_COUNT: 1
     NEWRELIC_APPNAME: P4 JCTest Production
     WP_DB_NAME: planet4-jctest_wordpress_master
     WP_STATELESS_BUCKET: planet4-jctest-stateless
