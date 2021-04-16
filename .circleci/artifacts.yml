@@ -11,8 +11,6 @@ job_environments:
     HELM_NAMESPACE: develop
     HELM_RELEASE: planet4-jctest
     NEWRELIC_APPNAME: P4 JCTest Development
-    MIN_REPLICA_COUNT: 3
-    MAX_REPLICA_COUNT: 3
     WP_DB_NAME: planet4-jctest_wordpress_develop
     WP_STATELESS_BUCKET: planet4-jctest-stateless-develop
   release_build_env: &release_build_env
@@ -25,6 +23,8 @@ job_environments:
     GOOGLE_PROJECT_ID: planet4-production
     HELM_NAMESPACE: jctest
     HELM_RELEASE: planet4-jctest-release
+    MIN_REPLICA_COUNT: 1
+    MAX_REPLICA_COUNT: 1
     NEWRELIC_APPNAME: P4 JCTest Release
     WP_DB_NAME: planet4-jctest_wordpress_release
     WP_STATELESS_BUCKET: planet4-jctest-stateless-release
