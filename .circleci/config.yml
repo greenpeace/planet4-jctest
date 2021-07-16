@@ -22,7 +22,7 @@ job_environments:
   common_environment: &common_environment
     CONTAINER_PREFIX: planet4-jctest
     APP_HOSTPATH: jctest
-    CHART_VERSION: 0.8.15-alpha2
+    CHART_VERSION: 0.8.15-alpha3
   develop_environment: &develop_environment
     APP_ENVIRONMENT: development
     APP_HOSTNAME: www-dev.greenpeace.org
